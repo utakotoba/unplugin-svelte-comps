@@ -24,7 +24,7 @@ export const DEFAULT_ACTIONS = true
 
 export const DEFAULT_SOURCEMAP = true
 
-export const DEFAULT_DTS = 'components.d.ts'
+export const DEFAULT_DTS = 'src/components.d.ts'
 
 export const DEFAULT_COMPONENTS_INFO = '.components-info.json'
 
