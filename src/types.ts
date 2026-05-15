@@ -55,7 +55,7 @@ export interface Options {
    * Files this plugin should consider for Svelte component auto-import
    * transforms.
    *
-   * @default /\.svelte(?:\?.*)?$/
+   * @default DEFAULT_INCLUDE, covering plain `.svelte` and Vite Svelte query ids.
    */
   include?: FilterPattern
 
@@ -72,7 +72,7 @@ export interface Options {
   /**
    * Directories to scan for local Svelte components.
    *
-   * @default 'src/components'
+   * @default 'src/lib/components'
    */
   dirs?: string | string[]
 
