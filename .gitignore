@@ -1,6 +1,9 @@
 # runtime + dependencies
 node_modules
 
+# development
+dist
+
 # preferences
 /.vscode
 

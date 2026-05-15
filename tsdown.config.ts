@@ -1,0 +1,8 @@
+import { defineConfig } from 'tsdown'
+
+export default defineConfig({
+  entry: 'src/index.ts',
+  format: ['es', 'cjs'],
+  dts: true,
+  tsconfig: './tsconfig.json',
+})
