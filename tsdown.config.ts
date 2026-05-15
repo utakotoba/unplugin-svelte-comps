@@ -8,10 +8,15 @@ export default defineConfig({
   tsconfig: './tsconfig.json',
   deps: {
     neverBundle: [
-      // dts
+      '@rspack/core',
       'esbuild',
-      'rollup',
+      'magic-string',
       'rolldown',
+      'rollup',
+      'svelte',
+      'svelte/compiler',
+      'tinyglobby',
+      'unplugin',
       'vite',
     ],
   },

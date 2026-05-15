@@ -1,34 +1,37 @@
 import { createUnplugin } from 'unplugin'
 
-import type { Options } from '../types'
+import { Context } from './context'
+import { PLUGIN_NAME } from './constants'
+import type { Options, PublicPluginAPI } from '../types'
 
 export default createUnplugin<Options | undefined>((options = {}) => {
-  const include = toArray(options.include ?? /\.svelte(?:\?.*)?$/)
-  const exclude = toArray(
-    options.exclude ?? [/[\\/]node_modules[\\/]/, /[\\/]\.git[\\/]/],
-  )
+  const ctx = new Context(options)
+  const api: PublicPluginAPI = {
+    findComponent: (name, importer) => ctx.findComponent(name, importer),
+    transform: (code, id) => ctx.transform(code, id),
+  }
 
   return {
-    name: 'unplugin-svelte-comps',
+    name: PLUGIN_NAME,
     enforce: 'pre',
+    api,
     transformInclude(id) {
-      return matches(include, id) && !matches(exclude, id)
+      return ctx.shouldTransform(id)
     },
-    transform() {
-      return null
+    async buildStart() {
+      await ctx.search()
+      for (const file of ctx.getComponentFiles()) this.addWatchFile(file)
+    },
+    async transform(code, id) {
+      return await ctx.transform(code, id)
+    },
+    vite: {
+      configResolved(config) {
+        ctx.setRoot(config.root)
+      },
+      configureServer(server) {
+        ctx.setupWatcher(server.watcher)
+      },
     },
   }
 })
-
-function toArray<T>(value: T | T[]): T[] {
-  return Array.isArray(value) ? value : [value]
-}
-
-function matches(patterns: Array<string | RegExp>, id: string): boolean {
-  return patterns.some((pattern) => {
-    if (typeof pattern === 'string') return id.includes(pattern)
-
-    pattern.lastIndex = 0
-    return pattern.test(id)
-  })
-}
