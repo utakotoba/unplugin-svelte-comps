@@ -1,6 +1,6 @@
 {
   "name": "unplugin-svelte-comps",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "On-demand Svelte 5 components auto-importing",
   "keywords": [
     "esbuild",
