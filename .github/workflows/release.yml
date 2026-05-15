@@ -24,6 +24,11 @@ jobs:
           TAG_COMMIT=$(git rev-parse ${{ github.ref_name }})
           git branch -r --contains $TAG_COMMIT | grep -q "origin/main" || (echo "Tag must be on main branch" && exit 1)
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -36,7 +41,7 @@ jobs:
         run: bun run build
 
       - name: Publish to npm registry
-        run: bunx npm publish --provenance --access public
+        run: npm publish --provenance --access public
 
       - name: Create GitHub Release
         run: bunx changelogithub --contributors --emoji false
