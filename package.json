@@ -1,0 +1,17 @@
+{
+  "name": "unplugin-svelte-comps",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": "Ly <i@letter.cafe>",
+  "type": "module",
+  "scripts": {
+    "fmt": "oxfmt",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "^7.0.0-dev.20260514.1",
+    "oxfmt": "^0.49.0",
+    "oxlint": "^1.64.0"
+  }
+}
