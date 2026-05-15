@@ -7,7 +7,9 @@ import type { Options, PublicPluginAPI } from '../types'
 export default createUnplugin<Options | undefined>((options = {}) => {
   const ctx = new Context(options)
   const api: PublicPluginAPI = {
-    findComponent: (name, importer) => ctx.findComponent(name, importer),
+    findComponent: (name, importer = '') => ctx.findComponent(name, importer),
+    findAction: (name, importer = '') => ctx.findAction(name, importer),
+    stringifyImport: (info) => ctx.stringifyImport(info),
     transform: (code, id) => ctx.transform(code, id),
   }
 
@@ -20,7 +22,7 @@ export default createUnplugin<Options | undefined>((options = {}) => {
     },
     async buildStart() {
       await ctx.search()
-      await ctx.generateDeclaration()
+      await ctx.generateFiles()
       for (const file of ctx.getComponentFiles()) this.addWatchFile(file)
       ctx.setupChokidar((file) => this.addWatchFile(file))
     },

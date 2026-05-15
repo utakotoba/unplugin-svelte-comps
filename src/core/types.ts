@@ -1,10 +1,17 @@
 import type { Program } from 'estree'
 
-import type { ComponentInfo, ComponentResolver } from '../types'
+import type {
+  ComponentInfo,
+  ComponentResolverObject,
+  FilterPattern,
+} from '../types'
+
+export type ResolveKind = 'component' | 'action'
 
 export interface ResolvedOptions {
   include: Array<string | RegExp>
   exclude: Array<string | RegExp>
+  excludeNames: Array<string | RegExp>
   dirs: string[]
   extensions: string[]
   globs: string[]
@@ -14,9 +21,12 @@ export interface ResolvedOptions {
   directoryAsNamespace: boolean
   prefix: string
   allowOverrides: boolean
-  resolvers: ComponentResolver[]
+  resolvers: ComponentResolverObject[]
+  importPathTransform: (path: string) => string | undefined
+  actions: boolean
   sourcemap: boolean
   dts: string | false
+  dumpComponentsInfo: string | false
 }
 
 export interface LocalComponent {
@@ -26,6 +36,7 @@ export interface LocalComponent {
 
 export interface DeclarationComponent extends ComponentInfo {
   as: string
+  type: ResolveKind
 }
 
 export interface ComponentWatcher {
@@ -33,3 +44,5 @@ export interface ComponentWatcher {
 }
 
 export type ScriptProgram = Program | null | undefined
+
+export type FilterPatternInput = FilterPattern | undefined

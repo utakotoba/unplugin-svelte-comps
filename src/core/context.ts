@@ -5,23 +5,27 @@ import type { TransformResult } from 'unplugin'
 import { glob } from 'tinyglobby'
 import { parse } from 'svelte/compiler'
 import MagicString from 'magic-string'
-import type { FSWatcher } from 'chokidar'
 import { watch } from 'chokidar'
+import type { FSWatcher } from 'chokidar'
 
 import { cleanId, matches, slash } from './utils'
 import type {
   ComponentWatcher,
   DeclarationComponent,
   LocalComponent,
+  ResolveKind,
   ResolvedOptions,
 } from './types'
 import {
   collectBindings,
+  findUsedActions,
   findUsedComponents,
   getScriptInsert,
 } from './transform'
 import { resolveOptions } from './options'
+import { writeComponentsInfo } from './info'
 import { writeDeclaration } from './declaration'
+import { DISABLE_COMMENT } from './constants'
 import {
   isComponentPath,
   normalizeResolveResult,
@@ -29,6 +33,7 @@ import {
   toDeclarationComponent,
   toImportPath,
   toLocalComponent,
+  transformComponentInfo,
 } from './components'
 import type { ComponentInfo, Options } from '../types'
 
@@ -38,6 +43,7 @@ export class Context {
 
   private components = new Map<string, LocalComponent>()
   private resolvedComponents = new Map<string, ComponentInfo>()
+  private resolvedActions = new Map<string, ComponentInfo>()
   private scanned = false
   private watcher: FSWatcher | undefined
   private declarationTimer: ReturnType<typeof setTimeout> | undefined
@@ -79,6 +85,20 @@ export class Context {
     await writeDeclaration(this.options.dts, this.getDeclarationComponents())
   }
 
+  async generateComponentsInfo() {
+    await writeComponentsInfo(
+      this.options.dumpComponentsInfo,
+      this.getDeclarationComponents(),
+    )
+  }
+
+  async generateFiles() {
+    await Promise.all([
+      this.generateDeclaration(),
+      this.generateComponentsInfo(),
+    ])
+  }
+
   setupWatcher(watcher: ComponentWatcher) {
     watcher.on('add', (path) => {
       const absPath = slash(resolve(this.root, path))
@@ -115,44 +135,85 @@ export class Context {
     name: string,
     importer: string,
   ): Promise<ComponentInfo | undefined> {
+    return await this.findResolved(name, 'component', importer)
+  }
+
+  async findAction(
+    name: string,
+    importer: string,
+  ): Promise<ComponentInfo | undefined> {
+    return await this.findResolved(name, 'action', importer)
+  }
+
+  stringifyImport(info: ComponentInfo) {
+    return stringifyImport(info.as || info.name || 'default', info)
+  }
+
+  async findResolved(
+    name: string,
+    kind: ResolveKind,
+    importer: string,
+  ): Promise<ComponentInfo | undefined> {
+    if (matches(this.options.excludeNames, name)) return
     await this.search()
 
-    const local = this.components.get(name)
-    if (local && local.path !== cleanId(importer))
-      return { from: toImportPath(local.path, importer) }
+    const local = kind === 'component' ? this.components.get(name) : undefined
+    if (local && local.path !== cleanId(importer)) {
+      return transformComponentInfo(
+        { from: toImportPath(local.path, importer) },
+        this.options.importPathTransform,
+      )
+    }
 
     for (const resolver of this.options.resolvers) {
-      const result = await resolver(name, importer)
+      if (resolver.type !== kind) continue
+      const result = await resolver.resolve(name, importer)
       if (result) {
-        const component = normalizeResolveResult(result)
-        this.addResolvedComponent(name, component)
+        const component = transformComponentInfo(
+          normalizeResolveResult(result),
+          this.options.importPathTransform,
+        )
+        this.addResolved(name, kind, component)
         return component
       }
     }
   }
 
   async transform(code: string, id: string): Promise<TransformResult> {
-    if (!this.shouldTransform(id) || !/<[A-Z]/.test(code)) return null
+    if (!this.shouldTransform(id) || code.includes(DISABLE_COMMENT)) return null
+    if (!/<[A-Z]|use:/.test(code)) return null
 
     await this.search()
 
     const filename = cleanId(id)
     const ast = parse(code, { filename, modern: true })
-    const names = findUsedComponents(ast.fragment)
-    if (!names.size) return null
+    const componentNames = findUsedComponents(ast.fragment)
+    const actionNames = this.options.actions
+      ? findUsedActions(ast.fragment)
+      : new Set<string>()
+    if (!componentNames.size && !actionNames.size) return null
 
     const declared = new Set<string>()
     collectBindings(declared, ast.module?.content)
     collectBindings(declared, ast.instance?.content)
 
     const imports: string[] = []
-    for (const name of names) {
+    for (const name of componentNames) {
       if (declared.has(name)) continue
 
       const component = await this.findComponent(name, filename)
       if (!component) continue
 
       imports.push(stringifyImport(name, component))
+      declared.add(name)
+    }
+    for (const name of actionNames) {
+      if (declared.has(name)) continue
+
+      const action = await this.findAction(name, filename)
+      if (!action) continue
+
+      imports.push(stringifyImport(name, action))
       declared.add(name)
     }
 
@@ -180,23 +241,35 @@ export class Context {
     if (!this.options.allowOverrides && this.components.has(component.name))
       return false
     this.components.set(component.name, component)
-    this.scheduleDeclaration()
+    this.scheduleGeneratedFiles()
     return true
   }
 
-  private addResolvedComponent(name: string, component: ComponentInfo) {
-    const current = this.resolvedComponents.get(name)
+  private addResolved(
+    name: string,
+    kind: ResolveKind,
+    component: ComponentInfo,
+  ) {
+    const map =
+      kind === 'component' ? this.resolvedComponents : this.resolvedActions
+    const current = map.get(name)
     if (current?.from === component.from && current.name === component.name)
       return
 
-    this.resolvedComponents.set(name, component)
-    this.scheduleDeclaration()
+    map.set(name, component)
+    this.scheduleGeneratedFiles()
   }
 
   private getDeclarationComponents(): DeclarationComponent[] {
     return [
       ...Array.from(this.components.values(), toDeclarationComponent),
       ...Array.from(this.resolvedComponents, ([as, component]) => ({
+        type: 'component' as const,
+        as,
+        ...component,
+      })),
+      ...Array.from(this.resolvedActions, ([as, component]) => ({
+        type: 'action' as const,
         as,
         ...component,
       })),
@@ -210,14 +283,15 @@ export class Context {
       this.components.delete(name)
       changed = true
     }
-    if (changed) this.scheduleDeclaration()
+    if (changed) this.scheduleGeneratedFiles()
   }
 
-  private scheduleDeclaration() {
-    if (!this.options.dts) return
+  private scheduleGeneratedFiles() {
+    if (!this.options.dts && !this.options.dumpComponentsInfo) return
     clearTimeout(this.declarationTimer)
     this.declarationTimer = setTimeout(() => {
       void this.generateDeclaration()
+      void this.generateComponentsInfo()
     }, 100)
   }
 }

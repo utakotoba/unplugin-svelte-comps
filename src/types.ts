@@ -3,12 +3,25 @@ import type { TransformResult } from 'unplugin'
 export type Awaitable<T> = T | Promise<T>
 export type FilterPattern = string | RegExp | Array<string | RegExp>
 
-export interface ComponentInfo {
+export interface ImportInfo {
+  /** Local binding name to use for declarations and component info. */
+  as?: string
+
   /** Import source for the component. */
   from: string
 
   /** Named export to import. Defaults to the module's default export. */
   name?: string
+}
+
+export type SideEffectsInfo =
+  | (ImportInfo | string)[]
+  | ImportInfo
+  | string
+  | undefined
+
+export interface ComponentInfo extends ImportInfo {
+  sideEffects?: SideEffectsInfo
 }
 
 export type ComponentResolveResult =
@@ -18,10 +31,24 @@ export type ComponentResolveResult =
   | undefined
   | void
 
-export type ComponentResolver = (
+export type ComponentResolverFunction = (
   name: string,
   importer: string,
 ) => Awaitable<ComponentResolveResult>
+
+export interface ComponentResolverObject {
+  type: 'component' | 'action'
+  resolve: ComponentResolverFunction
+}
+
+export type ComponentResolver =
+  | ComponentResolverFunction
+  | ComponentResolverObject
+
+export type ResolversOption =
+  | ComponentResolver
+  | ComponentResolver[]
+  | (ComponentResolver | ComponentResolver[])[]
 
 export interface Options {
   /**
@@ -38,6 +65,9 @@ export interface Options {
    * @default [/node_modules/, /\.git/]
    */
   exclude?: FilterPattern
+
+  /** RegExp or glob to match component/action names that will NOT be imported. */
+  excludeNames?: FilterPattern
 
   /**
    * Directories to scan for local Svelte components.
@@ -89,7 +119,17 @@ export interface Options {
   allowOverrides?: boolean
 
   /** Resolve components from libraries or virtual modules. */
-  resolvers?: ComponentResolver | ComponentResolver[]
+  resolvers?: ResolversOption
+
+  /** Apply a custom transform over import paths. */
+  importPathTransform?: (path: string) => string | undefined
+
+  /**
+   * Auto import Svelte actions used as `use:name`.
+   *
+   * @default true
+   */
+  actions?: boolean
 
   /**
    * Generate a sourcemap for transformed Svelte files.
@@ -104,12 +144,30 @@ export interface Options {
    * @default 'components.d.ts'
    */
   dts?: boolean | string
+
+  /**
+   * Save component/action information into a JSON file for other tools.
+   *
+   * @default false
+   */
+  dumpComponentsInfo?: boolean | string
 }
 
 export interface PublicPluginAPI {
+  /** Resolves a component using configured local discovery and resolvers. */
   findComponent: (
     name: string,
-    importer: string,
+    importer?: string,
   ) => Promise<ComponentInfo | undefined>
+
+  /** Resolves a Svelte action used as `use:name`. */
+  findAction: (
+    name: string,
+    importer?: string,
+  ) => Promise<ComponentInfo | undefined>
+
+  /** Obtain an import statement for a resolved component or action. */
+  stringifyImport: (info: ComponentInfo) => string
+
   transform: (code: string, id: string) => Promise<TransformResult>
 }

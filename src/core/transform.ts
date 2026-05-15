@@ -26,6 +26,18 @@ export function findUsedComponents(fragment: AST.Fragment) {
   return names
 }
 
+export function findUsedActions(fragment: AST.Fragment) {
+  const names = new Set<string>()
+  walkFragment(fragment, (node) => {
+    if (!('attributes' in node)) return
+    for (const attribute of node.attributes) {
+      if (attribute.type === 'UseDirective' && isIdentifier(attribute.name))
+        names.add(attribute.name)
+    }
+  })
+  return names
+}
+
 export function getScriptInsert(code: string, script: AST.Script) {
   const openEnd = code.indexOf('>', script.start) + 1
   const pos = openEnd || script.start
@@ -95,6 +107,10 @@ function collectStatement(
 
 function isComponentIdentifier(name: string) {
   return /^[A-Z_$][\w$]*$/.test(name)
+}
+
+function isIdentifier(name: string) {
+  return /^[$A-Z_a-z][$\w]*$/.test(name)
 }
 
 function isDeclaration(

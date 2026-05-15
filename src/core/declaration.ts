@@ -1,27 +1,38 @@
 import { dirname } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 
 import type { DeclarationComponent } from './types'
 import { stringifyTypeofImport } from './components'
+
+export interface DeclarationImports {
+  component: Record<string, string>
+  action: Record<string, string>
+}
 
 export async function writeDeclaration(
   filepath: string | false,
   components: DeclarationComponent[],
 ) {
-  if (!filepath || (!components.length && !existsSync(filepath))) return
+  if (!filepath) return
+  if (!components.length) {
+    if (existsSync(filepath)) rmSync(filepath)
+    return
+  }
+
+  const imports = getDeclarationImports(components, filepath)
+  const code = getDeclaration(imports)
 
   await mkdir(dirname(filepath), { recursive: true })
-  await writeFile(filepath, getDeclaration(components, filepath), 'utf-8')
+  await writeFile(filepath, code, 'utf-8')
 }
 
-function getDeclaration(components: DeclarationComponent[], filepath: string) {
-  const declarations = components
-    .filter((component) => isIdentifier(component.as))
-    .toSorted((a, b) => a.as.localeCompare(b.as))
-    .map((component) => {
-      return `  const ${component.as}: ${stringifyTypeofImport(component, filepath)}`
-    })
+function getDeclaration(imports: DeclarationImports) {
+  const declarations = [
+    stringifyDeclarationImports(imports.component),
+    stringifyDeclarationImports(imports.action),
+  ]
+    .filter(Boolean)
     .join('\n')
 
   return `/* eslint-disable */
@@ -34,6 +45,33 @@ declare global {
 ${declarations}
 }
 `
+}
+
+function getDeclarationImports(
+  components: DeclarationComponent[],
+  filepath: string,
+): DeclarationImports {
+  const imports: DeclarationImports = {
+    component: {},
+    action: {},
+  }
+
+  for (const component of components) {
+    if (!isIdentifier(component.as)) continue
+    imports[component.type][component.as] = stringifyTypeofImport(
+      component,
+      filepath,
+    )
+  }
+
+  return imports
+}
+
+function stringifyDeclarationImports(imports: Record<string, string>) {
+  return Object.entries(imports)
+    .toSorted(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `  const ${name}: ${value}`)
+    .join('\n')
 }
 
 function isIdentifier(value: string) {
