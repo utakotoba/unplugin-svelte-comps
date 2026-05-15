@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "description": "On-demand Svelte 5 components auto-importing",
   "keywords": [
+    "esbuild",
     "rolldown",
     "rollup",
+    "rspack",
     "svelte",
     "unplugin",
-    "vite",
-    "webpack"
+    "vite"
   ],
   "homepage": "https://github.com/utakotoba/unplugin-svelte-comps#readme",
   "bugs": {
@@ -24,7 +25,6 @@
     "dist"
   ],
   "type": "module",
-  "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "typesVersions": {
     "*": {
@@ -35,13 +35,23 @@
     }
   },
   "exports": {
-    ".": "./dist/index.mjs"
+    ".": "./dist/index.mjs",
+    "./esbuild": "./dist/esbuild.mjs",
+    "./rolldown": "./dist/rolldown.mjs",
+    "./rollup": "./dist/rollup.mjs",
+    "./rspack": "./dist/rspack.mjs",
+    "./types": "./dist/types.mjs",
+    "./vite": "./dist/vite.mjs",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "fmt": "oxfmt",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "build": "tsdown"
+  },
+  "dependencies": {
+    "unplugin": "^3.0.0"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
