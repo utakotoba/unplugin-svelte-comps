@@ -5,8 +5,8 @@ import type { TransformResult } from 'unplugin'
 import { glob } from 'tinyglobby'
 import { parse } from 'svelte/compiler'
 import MagicString from 'magic-string'
-import { watch } from 'chokidar'
 import type { FSWatcher } from 'chokidar'
+import { watch } from 'chokidar'
 
 import { cleanId, matches, slash } from './utils'
 import type {
