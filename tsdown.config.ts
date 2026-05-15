@@ -9,6 +9,7 @@ export default defineConfig({
   deps: {
     neverBundle: [
       '@rspack/core',
+      'chokidar',
       'esbuild',
       'magic-string',
       'rolldown',

@@ -1,4 +1,6 @@
-import type { ComponentResolver } from '../types'
+import type { Program } from 'estree'
+
+import type { ComponentInfo, ComponentResolver } from '../types'
 
 export interface ResolvedOptions {
   include: Array<string | RegExp>
@@ -14,6 +16,7 @@ export interface ResolvedOptions {
   allowOverrides: boolean
   resolvers: ComponentResolver[]
   sourcemap: boolean
+  dts: string | false
 }
 
 export interface LocalComponent {
@@ -21,8 +24,12 @@ export interface LocalComponent {
   path: string
 }
 
+export interface DeclarationComponent extends ComponentInfo {
+  as: string
+}
+
 export interface ComponentWatcher {
   on: (event: 'add' | 'unlink', cb: (path: string) => void) => void
 }
 
-export type Program = { body?: Array<Record<string, any>> } | null | undefined
+export type ScriptProgram = Program | null | undefined

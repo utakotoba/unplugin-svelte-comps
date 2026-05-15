@@ -97,6 +97,13 @@ export interface Options {
    * @default true
    */
   sourcemap?: boolean
+
+  /**
+   * Generate global component declarations for type-safe editor usage.
+   *
+   * @default 'components.d.ts'
+   */
+  dts?: boolean | string
 }
 
 export interface PublicPluginAPI {

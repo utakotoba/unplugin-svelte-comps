@@ -51,6 +51,7 @@
     "build": "tsdown"
   },
   "dependencies": {
+    "chokidar": "^5.0.0",
     "magic-string": "^0.30.21",
     "tinyglobby": "^0.2.16",
     "unplugin": "^3.0.0"
@@ -58,6 +59,7 @@
   "devDependencies": {
     "@rspack/core": "^2.0.3",
     "@types/bun": "^1.3.14",
+    "@types/estree": "^1.0.9",
     "@typescript/native-preview": "^7.0.0-dev.20260514.1",
     "esbuild": "^0.28.0",
     "oxfmt": "^0.49.0",

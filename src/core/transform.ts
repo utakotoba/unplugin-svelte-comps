@@ -1,24 +1,20 @@
 import type { AST } from 'svelte/compiler'
+import type {
+  Declaration,
+  ExportNamedDeclaration,
+  Identifier,
+  ImportDeclaration,
+  ModuleDeclaration,
+  Pattern,
+  Program,
+  Statement,
+} from 'estree'
 
-import type { Program } from './types'
+import type { ScriptProgram } from './types'
 
-export function collectBindings(names: Set<string>, program: Program) {
-  for (const statement of program?.body ?? []) {
-    if (statement.type === 'ImportDeclaration') {
-      for (const specifier of statement.specifiers ?? [])
-        addIdentifier(names, specifier.local)
-    } else if (statement.type === 'VariableDeclaration') {
-      for (const declaration of statement.declarations ?? [])
-        collectPattern(names, declaration.id)
-    } else if (
-      statement.type === 'FunctionDeclaration' ||
-      statement.type === 'ClassDeclaration'
-    ) {
-      addIdentifier(names, statement.id)
-    } else if (statement.type === 'ExportNamedDeclaration') {
-      collectExportDeclaration(names, statement.declaration)
-    }
-  }
+export function collectBindings(names: Set<string>, program: ScriptProgram) {
+  for (const statement of program?.body ?? [])
+    collectStatement(names, statement)
 }
 
 export function findUsedComponents(fragment: AST.Fragment) {
@@ -40,31 +36,75 @@ export function getScriptInsert(code: string, script: AST.Script) {
   return { pos, content: '\n' }
 }
 
-function addIdentifier(names: Set<string>, node: any) {
-  if (node?.type === 'Identifier') names.add(node.name)
+function addIdentifier(
+  names: Set<string>,
+  node: Identifier | null | undefined,
+) {
+  if (node) names.add(node.name)
 }
 
-function collectExportDeclaration(names: Set<string>, declaration: any) {
-  if (!declaration) return
-  collectBindings(names, { body: [declaration] })
+function collectDeclaration(names: Set<string>, declaration: Declaration) {
+  if (declaration.type === 'VariableDeclaration') {
+    for (const item of declaration.declarations) collectPattern(names, item.id)
+  } else if (
+    declaration.type === 'FunctionDeclaration' ||
+    declaration.type === 'ClassDeclaration'
+  ) {
+    addIdentifier(names, declaration.id)
+  }
 }
 
-function collectPattern(names: Set<string>, node: any) {
-  if (!node) return
+function collectExportDeclaration(
+  names: Set<string>,
+  statement: ExportNamedDeclaration,
+) {
+  if (statement.declaration) collectDeclaration(names, statement.declaration)
+}
 
+function collectImport(names: Set<string>, statement: ImportDeclaration) {
+  for (const specifier of statement.specifiers)
+    addIdentifier(names, specifier.local)
+}
+
+function collectPattern(names: Set<string>, node: Pattern) {
   if (node.type === 'Identifier') addIdentifier(names, node)
   else if (node.type === 'RestElement') collectPattern(names, node.argument)
   else if (node.type === 'AssignmentPattern') collectPattern(names, node.left)
   else if (node.type === 'ArrayPattern') {
-    for (const element of node.elements ?? []) collectPattern(names, element)
+    for (const element of node.elements) {
+      if (element) collectPattern(names, element)
+    }
   } else if (node.type === 'ObjectPattern') {
-    for (const property of node.properties ?? [])
-      collectPattern(names, property.value ?? property.argument)
+    for (const property of node.properties) {
+      if (property.type === 'RestElement')
+        collectPattern(names, property.argument)
+      else collectPattern(names, property.value)
+    }
   }
+}
+
+function collectStatement(
+  names: Set<string>,
+  statement: Program['body'][number],
+) {
+  if (statement.type === 'ImportDeclaration') collectImport(names, statement)
+  else if (isDeclaration(statement)) collectDeclaration(names, statement)
+  else if (statement.type === 'ExportNamedDeclaration')
+    collectExportDeclaration(names, statement)
 }
 
 function isComponentIdentifier(name: string) {
   return /^[A-Z_$][\w$]*$/.test(name)
+}
+
+function isDeclaration(
+  statement: Statement | ModuleDeclaration,
+): statement is Declaration {
+  return (
+    statement.type === 'VariableDeclaration' ||
+    statement.type === 'FunctionDeclaration' ||
+    statement.type === 'ClassDeclaration'
+  )
 }
 
 function walkFragment(

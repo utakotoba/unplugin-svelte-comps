@@ -1,7 +1,11 @@
 import { relative, resolve } from 'node:path'
 
 import { cleanId, isInside, pascalCase, slash } from './utils'
-import type { LocalComponent, ResolvedOptions } from './types'
+import type {
+  DeclarationComponent,
+  LocalComponent,
+  ResolvedOptions,
+} from './types'
 import type { ComponentInfo, ComponentResolveResult } from '../types'
 
 export function isComponentPath(path: string, options: ResolvedOptions) {
@@ -26,6 +30,14 @@ export function stringifyImport(as: string, info: ComponentInfo) {
     return `import ${as} from '${info.from}';`
   if (info.name === as) return `import { ${as} } from '${info.from}';`
   return `import { ${info.name} as ${as} } from '${info.from}';`
+}
+
+export function stringifyTypeofImport(info: ComponentInfo, dtsPath: string) {
+  const from = info.from.startsWith('/')
+    ? `./${slash(relative(resolve(dtsPath, '..'), info.from))}`
+    : info.from
+
+  return `typeof import('${from}')['${info.name || 'default'}']`
 }
 
 export function toImportPath(path: string, importer: string) {
@@ -64,5 +76,14 @@ export function toLocalComponent(
   return {
     name,
     path: slash(resolve(root, path)),
+  }
+}
+
+export function toDeclarationComponent(
+  component: LocalComponent,
+): DeclarationComponent {
+  return {
+    as: component.name,
+    from: component.path,
   }
 }

@@ -5,12 +5,14 @@ import type { TransformResult } from 'unplugin'
 import { glob } from 'tinyglobby'
 import { parse } from 'svelte/compiler'
 import MagicString from 'magic-string'
+import type { FSWatcher } from 'chokidar'
+import { watch } from 'chokidar'
 
 import { cleanId, matches, slash } from './utils'
 import type {
   ComponentWatcher,
+  DeclarationComponent,
   LocalComponent,
-  Program,
   ResolvedOptions,
 } from './types'
 import {
@@ -19,10 +21,12 @@ import {
   getScriptInsert,
 } from './transform'
 import { resolveOptions } from './options'
+import { writeDeclaration } from './declaration'
 import {
   isComponentPath,
   normalizeResolveResult,
   stringifyImport,
+  toDeclarationComponent,
   toImportPath,
   toLocalComponent,
 } from './components'
@@ -33,7 +37,10 @@ export class Context {
   options: ResolvedOptions
 
   private components = new Map<string, LocalComponent>()
+  private resolvedComponents = new Map<string, ComponentInfo>()
   private scanned = false
+  private watcher: FSWatcher | undefined
+  private declarationTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor(private rawOptions: Options) {
     this.options = resolveOptions(rawOptions, this.root)
@@ -43,6 +50,8 @@ export class Context {
     this.root = root
     this.options = resolveOptions(this.rawOptions, root)
     this.scanned = false
+    void this.watcher?.close()
+    this.watcher = undefined
   }
 
   shouldTransform(id: string) {
@@ -66,17 +75,36 @@ export class Context {
     this.scanned = true
   }
 
+  async generateDeclaration() {
+    await writeDeclaration(this.options.dts, this.getDeclarationComponents())
+  }
+
   setupWatcher(watcher: ComponentWatcher) {
     watcher.on('add', (path) => {
       const absPath = slash(resolve(this.root, path))
       if (isComponentPath(absPath, this.options)) this.addComponent(absPath)
     })
     watcher.on('unlink', (path) => {
-      const absPath = slash(resolve(this.root, path))
-      for (const [name, component] of this.components) {
-        if (component.path === absPath) this.components.delete(name)
-      }
+      this.removeComponent(slash(resolve(this.root, path)))
     })
+  }
+
+  setupChokidar(addWatchFile?: (file: string) => void) {
+    if (this.watcher) return
+
+    this.watcher = watch(this.options.globs, {
+      ignored: this.options.globsExclude,
+      ignoreInitial: true,
+      persistent: false,
+    })
+      .on('add', (path) => {
+        const absPath = slash(resolve(this.root, path))
+        if (!isComponentPath(absPath, this.options)) return
+        if (this.addComponent(absPath)) addWatchFile?.(absPath)
+      })
+      .on('unlink', (path) => {
+        this.removeComponent(slash(resolve(this.root, path)))
+      })
   }
 
   getComponentFiles() {
@@ -95,7 +123,11 @@ export class Context {
 
     for (const resolver of this.options.resolvers) {
       const result = await resolver(name, importer)
-      if (result) return normalizeResolveResult(result)
+      if (result) {
+        const component = normalizeResolveResult(result)
+        this.addResolvedComponent(name, component)
+        return component
+      }
     }
   }
 
@@ -110,8 +142,8 @@ export class Context {
     if (!names.size) return null
 
     const declared = new Set<string>()
-    collectBindings(declared, ast.module?.content as Program)
-    collectBindings(declared, ast.instance?.content as Program)
+    collectBindings(declared, ast.module?.content)
+    collectBindings(declared, ast.instance?.content)
 
     const imports: string[] = []
     for (const name of names) {
@@ -144,9 +176,48 @@ export class Context {
 
   private addComponent(path: string) {
     const component = toLocalComponent(path, this.options, this.root)
-    if (!component) return
+    if (!component) return false
     if (!this.options.allowOverrides && this.components.has(component.name))
-      return
+      return false
     this.components.set(component.name, component)
+    this.scheduleDeclaration()
+    return true
+  }
+
+  private addResolvedComponent(name: string, component: ComponentInfo) {
+    const current = this.resolvedComponents.get(name)
+    if (current?.from === component.from && current.name === component.name)
+      return
+
+    this.resolvedComponents.set(name, component)
+    this.scheduleDeclaration()
+  }
+
+  private getDeclarationComponents(): DeclarationComponent[] {
+    return [
+      ...Array.from(this.components.values(), toDeclarationComponent),
+      ...Array.from(this.resolvedComponents, ([as, component]) => ({
+        as,
+        ...component,
+      })),
+    ]
+  }
+
+  private removeComponent(path: string) {
+    let changed = false
+    for (const [name, component] of this.components) {
+      if (component.path !== path) continue
+      this.components.delete(name)
+      changed = true
+    }
+    if (changed) this.scheduleDeclaration()
+  }
+
+  private scheduleDeclaration() {
+    if (!this.options.dts) return
+    clearTimeout(this.declarationTimer)
+    this.declarationTimer = setTimeout(() => {
+      void this.generateDeclaration()
+    }, 100)
   }
 }

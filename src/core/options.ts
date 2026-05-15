@@ -37,5 +37,12 @@ export function resolveOptions(
     allowOverrides: options.allowOverrides ?? false,
     resolvers: toArray(options.resolvers ?? []),
     sourcemap: options.sourcemap ?? true,
+    dts:
+      options.dts === false
+        ? false
+        : resolve(
+            root,
+            typeof options.dts === 'string' ? options.dts : 'components.d.ts',
+          ),
   }
 }

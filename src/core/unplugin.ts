@@ -20,7 +20,9 @@ export default createUnplugin<Options | undefined>((options = {}) => {
     },
     async buildStart() {
       await ctx.search()
+      await ctx.generateDeclaration()
       for (const file of ctx.getComponentFiles()) this.addWatchFile(file)
+      ctx.setupChokidar((file) => this.addWatchFile(file))
     },
     async transform(code, id) {
       return await ctx.transform(code, id)
